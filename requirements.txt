@@ -4,3 +4,4 @@ pillow>=10.0
 pywinpty>=2.0
 pyte>=0.8
 uiautomation>=2.0
+PySide6>=6.5
