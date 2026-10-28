@@ -28,6 +28,14 @@ FONT = "Segoe UI"
 FONT_MONO = "Consolas"
 
 
+def blend(color_a: str, color_b: str, t: float) -> str:
+    """Смешивает два цвета #rrggbb: t=0 → a, t=1 → b."""
+    t = max(0.0, min(1.0, t))
+    a = [int(color_a[i : i + 2], 16) for i in (1, 3, 5)]
+    b = [int(color_b[i : i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(a, b))
+
+
 def qss() -> str:
     """Глобальные стили приложения."""
     return f"""
@@ -35,7 +43,7 @@ def qss() -> str:
         font-family: "{FONT}";
         color: {TEXT};
     }}
-    QMainWindow, QWidget#root {{
+    QMainWindow {{
         background-color: {BG};
     }}
     QWidget#header {{
@@ -87,12 +95,15 @@ def qss() -> str:
         background-color: {ACCENT_HOVER};
     }}
     QPushButton#send {{
-        background-color: {ACCENT};
-        color: #07080f;
+        background-color: {CYAN};
+        color: #04050c;
         border: none;
-        border-radius: 22px;
-        font-size: 18px;
-        font-weight: 700;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 600;
+    }}
+    QPushButton#send:hover {{
+        background-color: #7fe6ff;
     }}
     QPushButton#send:hover {{
         background-color: {ACCENT_HOVER};
@@ -100,6 +111,18 @@ def qss() -> str:
     QPushButton#send:disabled {{
         background-color: {ACCENT_DIM};
         color: {MUTED};
+    }}
+    QPushButton#attach {{
+        background-color: {CARD};
+        color: {TEXT_DIM};
+        border: 1px solid {BORDER};
+        border-radius: 22px;
+        font-size: 16px;
+    }}
+    QPushButton#attach:hover {{
+        background-color: {ACCENT_DIM};
+        color: {ACCENT_HOVER};
+        border-color: {ACCENT};
     }}
     QLineEdit {{
         background-color: {INPUT_BG};

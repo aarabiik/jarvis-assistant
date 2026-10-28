@@ -61,6 +61,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QFileDialog,
 )
 
 APP_NAME = "JARVIS"
@@ -148,6 +149,153 @@ class Bubble(QFrame):
             self.setMaximumWidth(720)
 
 
+# --- звёздный фон ----------------------------------------------------------
+class StarField(QWidget):
+    """Фон чата: градиент, туманности и мерцающие звёзды."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._phase = 0.0
+        self._stars: list[tuple[float, float, float, float]] = []
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(90)
+
+    def _tick(self) -> None:
+        self._phase = (self._phase + 0.1) % 6.283
+        self.update()
+
+    def _ensure_stars(self) -> None:
+        if self._stars:
+            return
+        import random
+
+        rng = random.Random(11)
+        w = max(self.width(), 100)
+        h = max(self.height(), 100)
+        self._stars = [
+            (rng.uniform(0, w), rng.uniform(0, h), rng.choice((1, 1, 2, 2, 3)),
+             rng.uniform(0.2, 1.0))
+            for _ in range(120)
+        ]
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w = self.width()
+        h = self.height()
+        if w <= 1 or h <= 1:
+            return
+
+        # градиент фона
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0, QColor(theme.BG))
+        grad.setColorAt(1, QColor(theme.blend(theme.BG, theme.ACCENT, 0.10)))
+        painter.fillRect(0, 0, w, h, grad)
+
+        # туманности
+        import random
+
+        rng = random.Random(11)
+        for _ in range(3):
+            cx = rng.uniform(0, w)
+            cy = rng.uniform(0, h)
+            r = rng.uniform(w * 0.2, w * 0.45)
+            tint = QColor(rng.choice((theme.ACCENT, theme.CYAN, theme.MAGENTA)))
+            for i in range(10, 0, -1):
+                t = i / 10
+                tint.setAlpha(int(8 * (1 - t) + 3))
+                painter.setBrush(tint)
+                painter.setPen(Qt.NoPen)
+                painter.drawEllipse(
+                    int(cx - r * t), int(cy - r * t * 0.65),
+                    int(r * t * 2), int(r * t * 1.3),
+                )
+
+        # звёзды
+        self._ensure_stars()
+        for x, y, size, bright in self._stars:
+            shift = 0.5 + 0.5 * __import__("math").sin(self._phase * 1.3 + x)
+            alpha = int((0.35 + 0.6 * shift) * 255 * bright)
+            color = QColor(255, 255, 255, alpha)
+            painter.setBrush(color)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(int(x), int(y), int(size), int(size))
+
+
+class StarScrollArea(QScrollArea):
+    """QScrollArea со звёздным фоном, нарисованным в paintEvent."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._phase = 0.0
+        self._stars: list[tuple[float, float, float, float]] = []
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(90)
+
+    def _tick(self) -> None:
+        self._phase = (self._phase + 0.1) % 6.283
+        self.viewport().update()
+
+    def _ensure_stars(self) -> None:
+        if self._stars:
+            return
+        import random
+
+        rng = random.Random(11)
+        w = max(self.viewport().width(), 100)
+        h = max(self.viewport().height(), 100)
+        self._stars = [
+            (rng.uniform(0, w), rng.uniform(0, h), rng.choice((1, 1, 2, 2, 3)),
+             rng.uniform(0.2, 1.0))
+            for _ in range(120)
+        ]
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self.viewport())
+        painter.setRenderHint(QPainter.Antialiasing)
+        w = self.viewport().width()
+        h = self.viewport().height()
+        if w <= 1 or h <= 1:
+            return
+
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0, QColor(theme.BG))
+        grad.setColorAt(1, QColor(theme.blend(theme.BG, theme.ACCENT, 0.10)))
+        painter.fillRect(0, 0, w, h, grad)
+
+        import random
+
+        rng = random.Random(11)
+        for _ in range(3):
+            cx = rng.uniform(0, w)
+            cy = rng.uniform(0, h)
+            r = rng.uniform(w * 0.2, w * 0.45)
+            tint = QColor(rng.choice((theme.ACCENT, theme.CYAN, theme.MAGENTA)))
+            for i in range(10, 0, -1):
+                t = i / 10
+                tint.setAlpha(int(8 * (1 - t) + 3))
+                painter.setBrush(tint)
+                painter.setPen(Qt.NoPen)
+                painter.drawEllipse(
+                    int(cx - r * t), int(cy - r * t * 0.65),
+                    int(r * t * 2), int(r * t * 1.3),
+                )
+
+        self._ensure_stars()
+        for x, y, size, bright in self._stars:
+            shift = 0.5 + 0.5 * __import__("math").sin(self._phase * 1.3 + x)
+            alpha = int((0.35 + 0.6 * shift) * 255 * bright)
+            color = QColor(255, 255, 255, alpha)
+            painter.setBrush(color)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(int(x), int(y), int(size), int(size))
+
+        painter.end()
+        super().paintEvent(event)
+
+
 # --- главное окно ----------------------------------------------------------
 class JarvisApp(QMainWindow):
     def __init__(self) -> None:
@@ -166,6 +314,7 @@ class JarvisApp(QMainWindow):
         self.worker: threading.Thread | None = None
         self._turn_started = 0.0
         self._closed = False
+        self.attachments: list[str] = []
         self.store = chatstore.ChatStore(APP_DIR / "chats")
         self.session_id = chatstore.ChatStore.new_id()
         self.session_title = ""
@@ -259,11 +408,16 @@ class JarvisApp(QMainWindow):
         layout.addWidget(header)
 
         # -- чат -----------------------------------------------------------
-        self.chat_scroll = QScrollArea()
+        self.chat_scroll = StarScrollArea()
         self.chat_scroll.setWidgetResizable(True)
         self.chat_scroll.setStyleSheet("background: transparent; border: none;")
+        self.chat_scroll.setAutoFillBackground(False)
+        self.chat_scroll.viewport().setAutoFillBackground(False)
+        self.chat_scroll.viewport().setStyleSheet("background: transparent;")
         self.chat_container = QWidget()
         self.chat_container.setStyleSheet("background: transparent;")
+        self.chat_container.setAutoFillBackground(False)
+        self.chat_container.setAttribute(Qt.WA_TranslucentBackground)
         self.chat_layout = QVBoxLayout(self.chat_container)
         self.chat_layout.setContentsMargins(18, 14, 18, 14)
         self.chat_layout.setSpacing(10)
@@ -283,11 +437,22 @@ class JarvisApp(QMainWindow):
         self.entry.returnPressed.connect(self.send)
         b_layout.addWidget(self.entry, 1)
 
-        self.send_btn = QPushButton("➤")
+        # кнопка прикрепления файла
+        self.attach_btn = QPushButton("+")
+        self.attach_btn.setObjectName("attach")
+        self.attach_btn.setFixedSize(44, 44)
+        self.attach_btn.setToolTip("Прикрепить файл")
+        self.attach_btn.clicked.connect(self.attach_file)
+        b_layout.addWidget(self.attach_btn)
+
+        self.send_btn = QPushButton("Отправить")
         self.send_btn.setObjectName("send")
-        self.send_btn.setFixedSize(44, 44)
+        self.send_btn.setFixedSize(110, 44)
         self.send_btn.clicked.connect(self.send)
         b_layout.addWidget(self.send_btn)
+        # принудительно обновить геометрию, чтобы кнопки точно отрисовались
+        self.send_btn.show()
+        self.attach_btn.show()
         layout.addWidget(bottom)
 
         # -- статус --------------------------------------------------------
@@ -488,13 +653,38 @@ class JarvisApp(QMainWindow):
             pass
         self.status_label.setText("Остановлено. Жду завершения текущего шага…")
 
+    def attach_file(self) -> None:
+        """Выбрать файл и прикрепить его к следующему сообщению."""
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Прикрепить файлы", "", "Все файлы (*.*)"
+        )
+        if not paths:
+            return
+        for path in paths:
+            if path not in self.attachments:
+                self.attachments.append(path)
+        names = ", ".join(Path(p).name for p in self.attachments)
+        self.status_label.setText(f"Прикреплено: {names}")
+        self._append("tool", f"📎 Прикреплено: {names}")
+
     def send(self) -> None:
         text = self.entry.text().strip()
-        if not text:
+        if not text and not self.attachments:
             return
         if self.worker is not None and self.worker.is_alive():
             self.status_label.setText("Подождите: ассистент ещё работает (F12 — стоп).")
             return
+        # если есть прикреплённые файлы — добавим их содержимое к запросу
+        if self.attachments:
+            parts = [text] if text else []
+            for path in self.attachments:
+                try:
+                    content = Path(path).read_text(encoding="utf-8", errors="replace")
+                    parts.append(f"\n\n[Файл: {Path(path).name}]\n{content[:8000]}")
+                except Exception as exc:  # noqa: BLE001
+                    parts.append(f"\n\n[Файл: {Path(path).name} — не прочитан: {exc}]")
+            text = "\n".join(parts)
+            self.attachments.clear()
         self.entry.clear()
         self._append("user", text)
         self.stop_event.clear()
