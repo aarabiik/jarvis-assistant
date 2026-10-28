@@ -315,6 +315,7 @@ class JarvisApp(QMainWindow):
         self._turn_started = 0.0
         self._closed = False
         self.attachments: list[str] = []
+        self.pasted_image: str | None = None  # base64 скриншота из буфера
         self.store = chatstore.ChatStore(APP_DIR / "chats")
         self.session_id = chatstore.ChatStore.new_id()
         self.session_title = ""
@@ -433,9 +434,17 @@ class JarvisApp(QMainWindow):
         b_layout.setSpacing(10)
 
         self.entry = QLineEdit()
-        self.entry.setPlaceholderText("Спроси JARVIS…")
+        self.entry.setPlaceholderText("Спроси JARVIS… (Ctrl+V — вставить скриншот)")
         self.entry.returnPressed.connect(self.send)
         b_layout.addWidget(self.entry, 1)
+
+        # кнопка вставки скриншота из буфера
+        self.paste_btn = QPushButton("📷")
+        self.paste_btn.setObjectName("attach")
+        self.paste_btn.setFixedSize(44, 44)
+        self.paste_btn.setToolTip("Вставить скриншот из буфера (Ctrl+V)")
+        self.paste_btn.clicked.connect(self.paste_screenshot)
+        b_layout.addWidget(self.paste_btn)
 
         # кнопка прикрепления файла
         self.attach_btn = QPushButton("+")
@@ -463,7 +472,14 @@ class JarvisApp(QMainWindow):
         self._append("assistant",
             "Привет. Я JARVIS — управляю мышью, клавиатурой, консолью и файлами.\n\n"
             "◱ Мини — компактный режим поверх экрана (Ctrl+Shift+J).\n"
-            "F8 — сохранить точку под курсором, F12 — стоп.")
+            "F8 — сохранить точку под курсором, F12 — стоп.\n"
+            "Ctrl+V — вставить скриншот из буфера обмена.")
+
+        # Ctrl+V в поле ввода — вставить скриншот из буфера
+        from PySide6.QtGui import QKeySequence, QShortcut
+
+        self._paste_shortcut = QShortcut(QKeySequence("Ctrl+V"), self.entry)
+        self._paste_shortcut.activated.connect(self.paste_screenshot)
 
     # -- логотип-реактор ---------------------------------------------------
     def _draw_logo(self) -> None:
@@ -653,6 +669,27 @@ class JarvisApp(QMainWindow):
             pass
         self.status_label.setText("Остановлено. Жду завершения текущего шага…")
 
+    def paste_screenshot(self) -> None:
+        """Вставить скриншот из буфера обмена (Ctrl+V)."""
+        try:
+            from PySide6.QtGui import QGuiApplication
+            from PySide6.QtCore import QBuffer
+
+            clipboard = QGuiApplication.clipboard()
+            image = clipboard.image()
+            if image.isNull():
+                self.status_label.setText("В буфере нет изображения.")
+                return
+            buffer = QBuffer()
+            buffer.open(QBuffer.WriteOnly)
+            image.save(buffer, "PNG")
+            self.pasted_image = base64.b64encode(bytes(buffer.data())).decode("ascii")
+            buffer.close()
+            self._append("tool", "📷 Скриншот вставлен из буфера (Ctrl+V).")
+            self.status_label.setText("Скриншот готов к отправке. Напиши вопрос и нажми Enter.")
+        except Exception as exc:  # noqa: BLE001
+            self.status_label.setText(f"Не удалось вставить скриншот: {exc}")
+
     def attach_file(self) -> None:
         """Выбрать файл и прикрепить его к следующему сообщению."""
         paths, _ = QFileDialog.getOpenFileNames(
@@ -691,12 +728,19 @@ class JarvisApp(QMainWindow):
         self._turn_started = time.time()
         self.send_btn.setEnabled(False)
         self.status_label.setText("Думаю…")
-        self.worker = threading.Thread(target=self._turn, args=(text,), daemon=True)
+        pasted = self.pasted_image
+        self.pasted_image = None
+        self.worker = threading.Thread(
+            target=self._turn, args=(text, pasted), daemon=True
+        )
         self.worker.start()
 
-    def _turn(self, text: str) -> None:
+    def _turn(self, text: str, pasted_image: str | None = None) -> None:
         try:
-            image = self._screenshot_b64() if self.settings.get("vision") else None
+            if pasted_image:
+                image = pasted_image
+            else:
+                image = self._screenshot_b64() if self.settings.get("vision") else None
             answer = self.agent.ask(text, image)
             self.events.put(("assistant", answer))
         except LLMError as exc:
