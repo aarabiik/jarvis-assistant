@@ -1,0 +1,6 @@
+pynput>=1.7.6
+requests>=2.31
+pillow>=10.0
+pywinpty>=2.0
+pyte>=0.8
+uiautomation>=2.0

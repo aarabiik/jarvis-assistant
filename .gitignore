@@ -1,0 +1,10 @@
+# секреты и локальные данные
+settings.json
+chats/
+workspace/
+__pycache__/
+*.pyc
+journal.log
+@AutomationLog.txt
+.venv/
+venv/

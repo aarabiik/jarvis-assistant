@@ -1,0 +1,19 @@
+{
+ "base_url": "https://api.munito.ai/inference/v1",
+ "api_key": "",
+ "model": "deepseek-ai/deepseek-v4.1-flash-1017",
+ "vision_model": "zai-org/glm-5.3-flash",
+ "reasoning_effort": "low",
+ "vision": false,
+ "max_steps": 0,
+ "max_seconds": 1800,
+ "max_context_chars": 0,
+ "work_dir": "C:\\Users\\kamil\\OneDrive\\Desktop\\opencode",
+ "shell": "powershell",
+ "forbidden_patterns": "",
+ "temperature": 0.2,
+ "always_on_top": false,
+ "confirm_mode": false,
+ "minimize_before_typing": true,
+ "allow_outside": true
+}
