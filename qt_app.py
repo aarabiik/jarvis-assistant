@@ -475,10 +475,14 @@ class JarvisApp(QMainWindow):
             "F8 — сохранить точку под курсором, F12 — стоп.\n"
             "Ctrl+V — вставить скриншот из буфера обмена.")
 
-        # Ctrl+V в поле ввода — вставить скриншот из буфера
+        # Ctrl+V в поле ввода — вставить скриншот из буфера.
+        # Контекст WidgetShortcut: срабатывает только когда фокус в поле ввода,
+        # чтобы не перехватывать Ctrl+V в диалогах (настройки и т.п.).
+        from PySide6.QtCore import Qt
         from PySide6.QtGui import QKeySequence, QShortcut
 
         self._paste_shortcut = QShortcut(QKeySequence("Ctrl+V"), self.entry)
+        self._paste_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
         self._paste_shortcut.activated.connect(self.paste_screenshot)
 
     # -- логотип-реактор ---------------------------------------------------
@@ -670,7 +674,7 @@ class JarvisApp(QMainWindow):
         self.status_label.setText("Остановлено. Жду завершения текущего шага…")
 
     def paste_screenshot(self) -> None:
-        """Вставить скриншот из буфера обмена (Ctrl+V)."""
+        """Вставить из буфера обмена (Ctrl+V): скриншот или текст."""
         try:
             from PySide6.QtGui import QGuiApplication
             from PySide6.QtCore import QBuffer
@@ -678,7 +682,10 @@ class JarvisApp(QMainWindow):
             clipboard = QGuiApplication.clipboard()
             image = clipboard.image()
             if image.isNull():
-                self.status_label.setText("В буфере нет изображения.")
+                # в буфере нет изображения — вставляем обычный текст в поле ввода
+                text = clipboard.text()
+                if text:
+                    self.entry.insert(text)
                 return
             buffer = QBuffer()
             buffer.open(QBuffer.WriteOnly)
@@ -1607,39 +1614,87 @@ class MiniOverlay(QWidget):
 class SettingsDialog(QDialog):
     def __init__(self, parent, settings: dict[str, Any]) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Настройки")
-        self.setMinimumWidth(460)
+        self.setWindowTitle("Настройки JARVIS")
+        self.setMinimumSize(480, 400)
         self.setStyleSheet(theme.qss())
         self._settings = settings
         self._vars: dict[str, Any] = {}
+        # центрируем относительно родителя
+        if parent is not None:
+            parent_geo = parent.geometry()
+            self.move(
+                parent_geo.center().x() - 240,
+                parent_geo.center().y() - 200,
+            )
 
-        form = QFormLayout(self)
-        form.setSpacing(10)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 20, 20, 16)
+        outer.setSpacing(14)
 
-        self._add_entry(form, "api_url", "API URL")
-        self._add_entry(form, "api_key", "API ключ")
-        self._add_entry(form, "model", "Модель")
-        self._add_entry(form, "vision_model", "Vision-модель")
+        # заголовок
+        title = QLabel("Настройки подключения к модели")
+        title.setStyleSheet(
+            f"color: {theme.TEXT}; font-size: 16px; font-weight: 600;"
+        )
+        outer.addWidget(title)
 
-        self._confirm = QCheckBox("Спрашивать перед действием")
+        hint = QLabel(
+            "Здесь задаётся адрес API, ключ и модели. "
+            "Обычно менять нужно только «Модель»."
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color: {theme.MUTED}; font-size: 12px;")
+        outer.addWidget(hint)
+
+        form = QVBoxLayout()
+        form.setSpacing(6)
+
+        self._add_entry(form, "api_url", "API URL", "Адрес сервера, например https://api.openai.com/v1")
+        self._add_entry(form, "api_key", "API ключ", "Секретный ключ доступа (не показывай никому)")
+        self._add_entry(form, "model", "Модель", "Основная модель для чата")
+        self._add_entry(form, "vision_model", "Vision-модель", "Модель, которая смотрит на экран")
+        outer.addLayout(form)
+
+        # чекбоксы
+        self._confirm = QCheckBox("Спрашивать перед каждым действием")
         self._confirm.setChecked(bool(settings.get("confirm", False)))
-        form.addRow(self._confirm)
+        outer.addWidget(self._confirm)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
+        self._vision = QCheckBox("Отправлять скриншот экрана при каждом запросе")
+        self._vision.setChecked(bool(settings.get("vision", False)))
+        outer.addWidget(self._vision)
 
-    def _add_entry(self, form, key: str, label: str) -> None:
+        outer.addStretch()
+
+        # кнопки
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+        save_btn = QPushButton("Сохранить")
+        save_btn.setObjectName("accent")
+        save_btn.clicked.connect(self.accept)
+        btn_row.addWidget(save_btn)
+        outer.addLayout(btn_row)
+
+    def _add_entry(self, form, key: str, label: str, hint: str = "") -> None:
+        lbl = QLabel(label)
+        lbl.setStyleSheet(f"color: {theme.TEXT}; font-size: 13px; font-weight: 600;")
+        form.addWidget(lbl)
         edit = QLineEdit(str(self._settings.get(key, "")))
+        edit.setMinimumWidth(280)
+        if hint:
+            edit.setToolTip(hint)
         self._vars[key] = edit
-        form.addRow(label, edit)
+        form.addWidget(edit)
 
     def collect(self) -> dict[str, Any]:
         data = dict(self._settings)
         for key, widget in self._vars.items():
             data[key] = widget.text().strip()
         data["confirm"] = self._confirm.isChecked()
+        data["vision"] = self._vision.isChecked()
         return data
 
 
@@ -1819,6 +1874,7 @@ def main() -> None:
         args.exc_type, args.exc_value, args.exc_traceback
     )
     app = QApplication(sys.argv)
+    app.setStyleSheet(theme.qss())
     window = JarvisApp()
     window.show()
     if "--selftest" in sys.argv:

@@ -165,6 +165,25 @@ def qss() -> str:
         border: 1px solid {ACCENT};
         padding: 4px;
     }}
+    QCheckBox {{
+        color: {TEXT};
+        font-size: 13px;
+        spacing: 8px;
+    }}
+    QCheckBox::indicator {{
+        width: 18px;
+        height: 18px;
+        border: 1px solid {BORDER};
+        border-radius: 4px;
+        background-color: {INPUT_BG};
+    }}
+    QCheckBox::indicator:checked {{
+        background-color: {ACCENT};
+        border-color: {ACCENT};
+    }}
+    QLabel {{
+        color: {TEXT};
+    }}
     """
 
 
